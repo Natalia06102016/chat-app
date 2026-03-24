@@ -1,58 +1,40 @@
 <!DOCTYPE html>
 <html>
 <body>
-<h2>Chat</h2>
-
-<input id="email">
-<input id="password">
+<h2>Chat App</h2>
+Email: <input id="email">
+Password: <input id="password" type="password">
+<button onclick="register()">Register</button>
 <button onclick="login()">Login</button>
-
-<input id="room">
-<button onclick="join()">Join</button>
-
-<input id="msg">
-<button onclick="send()">Send</button>
-
+<br>
+Room: <input id="room"><button onclick="join()">Join</button><br>
+Message: <input id="msg"><button onclick="send()">Send</button>
 <div id="chat"></div>
 
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-
 <script>
-let socket;
-let token;
-
+let socket, token;
+async function register() {
+  await fetch("http://localhost:3000/auth/register", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({email: email.value, username:"user"+Date.now(), password: password.value})
+  });
+  alert("Registered");
+}
 async function login() {
   const res = await fetch("http://localhost:3000/auth/login", {
     method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({
-      email: email.value,
-      password: password.value
-    })
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({email: email.value, password: password.value})
   });
-
   const data = await res.json();
   token = data.token;
-
-  socket = io("http://localhost:3000", {
-    auth: { token }
-  });
-
-  socket.on("roomMessage", (msg) => {
-    chat.innerHTML += "<p>" + msg.content + "</p>";
-  });
+  socket = io("http://localhost:3000", { auth: { token } });
+  socket.on("roomMessage", m => chat.innerHTML += "<p>"+m.content+"</p>");
 }
-
-function join() {
-  socket.emit("joinRoom", room.value);
-}
-
-function send() {
-  socket.emit("roomMessage", {
-    roomId: room.value,
-    content: msg.value
-  });
-}
+function join() { socket.emit("joinRoom", room.value); }
+function send() { socket.emit("roomMessage", { roomId: room.value, content: msg.value }); }
 </script>
 </body>
 </html>
