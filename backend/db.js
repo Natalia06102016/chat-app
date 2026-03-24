@@ -1,7 +1,8 @@
 const { Pool } = require("pg");
-const pool = new Pool({
-host: process.env.DB_HOST,
-user: "chat",
-password: "chat",
-database: "chatdb"
+
+module.exports = new Pool({
+  host: process.env.DB_HOST || "localhost",
+  user: "chat",
+  password: "chat",
+  database: "chatdb"
 });
