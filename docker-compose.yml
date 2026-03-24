@@ -1,0 +1,23 @@
+version: "3.9"
+services:
+db:
+image: postgres:15
+restart: always
+environment:
+POSTGRES_USER: chat
+POSTGRES_PASSWORD: chat
+POSTGRES_DB: chatdb
+ports:
+- "5432:5432"
+backend:
+build: ./backend
+ports:
+- "3000:3000"
+depends_on:
+- db
+environment:
+DB_HOST: db
+frontend:
+build: ./frontend
+ports:
+- "8080:80"
