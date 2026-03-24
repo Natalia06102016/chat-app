@@ -11,3 +11,12 @@ CREATE TABLE messages (
   room_id INTEGER,
   content TEXT
 );
+CREATE TABLE rooms (
+  id SERIAL PRIMARY KEY,
+  name TEXT UNIQUE
+);
+
+CREATE TABLE room_members (
+  user_id INTEGER,
+  room_id INTEGER
+);
