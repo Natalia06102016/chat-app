@@ -51,6 +51,15 @@ io.on("connection", (socket) => {
     }
 
     socket.join("room_" + roomId);
+    const messages = await pool.query(
+  `SELECT id, sender_id, room_id, content, created_at
+   FROM messages
+   WHERE room_id = $1
+   ORDER BY created_at ASC`,
+  [roomId]
+);
+
+socket.emit("roomHistory", messages.rows);
   } catch (error) {
     socket.emit("errorMessage", {
       message: "Failed to join room"
