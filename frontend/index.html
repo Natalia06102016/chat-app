@@ -65,6 +65,29 @@
 
 <div class="box">
 
+  <h2>Friends</h2>
+
+  <input id="friendId" type="number" placeholder="User ID">
+
+  <button onclick="sendFriendRequest()">
+    Add friend
+  </button>
+
+  <button onclick="loadFriends()">
+    Refresh friends
+  </button>
+
+  <h3>My friends</h3>
+
+  <div id="friendsList"></div>
+
+  <h3>Friend requests</h3>
+
+  <div id="requestsList"></div>
+
+</div>  
+<div class="box">
+
   <h2>Account</h2>
 
   <input id="email" type="email" placeholder="Email">
@@ -202,7 +225,7 @@ async function login() {
     socket.on("connect", () => {
       showStatus("Logged in successfully", "success");
     });
-
+      loadFriends();
     socket.on("roomHistory", messages => {
 
       const chat = document.getElementById("chat");
@@ -274,7 +297,217 @@ async function createRoom() {
   }
 }
 
+async function sendFriendRequest() {
 
+  if (!token) {
+    showStatus("Please login first", "error");
+    return;
+  }
+
+  const friendId = document.getElementById("friendId").value;
+
+  if (!friendId) {
+    showStatus("Enter user ID", "error");
+    return;
+  }
+
+  try {
+
+    const res = await fetch(
+      "http://localhost:3000/friends/request",
+      {
+        method: "POST",
+
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + token
+        },
+
+        body: JSON.stringify({
+          friend_id: Number(friendId)
+        })
+      }
+    );
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error || "Failed to send request");
+    }
+
+    showStatus(
+      "Friend request sent",
+      "success"
+    );
+
+    document.getElementById("friendId").value = "";
+
+  } catch (error) {
+
+    showStatus(error.message, "error");
+
+  }
+}
+
+
+async function loadFriends() {
+
+  if (!token) {
+    showStatus("Please login first", "error");
+    return;
+  }
+
+  try {
+
+    const friendsResponse = await fetch(
+      "http://localhost:3000/friends",
+      {
+        headers: {
+          "Authorization": "Bearer " + token
+        }
+      }
+    );
+
+    const friends = await friendsResponse.json();
+
+    const friendsList =
+      document.getElementById("friendsList");
+
+    friendsList.innerHTML = "";
+
+    friends.forEach(friend => {
+
+      const div = document.createElement("div");
+
+      div.textContent =
+        `${friend.username} (${friend.email})`;
+
+      friendsList.appendChild(div);
+
+    });
+
+
+    const requestsResponse = await fetch(
+      "http://localhost:3000/friends/requests",
+      {
+        headers: {
+          "Authorization": "Bearer " + token
+        }
+      }
+    );
+
+    const requests = await requestsResponse.json();
+
+    const requestsList =
+      document.getElementById("requestsList");
+
+    requestsList.innerHTML = "";
+
+    requests.forEach(request => {
+
+      const div = document.createElement("div");
+
+      div.innerHTML = `
+        ${request.username}
+
+        <button onclick="acceptFriend(${request.id})">
+          Accept
+        </button>
+
+        <button onclick="rejectFriend(${request.id})">
+          Reject
+        </button>
+      `;
+
+      requestsList.appendChild(div);
+
+    });
+
+  } catch (error) {
+
+    showStatus(
+      "Failed to load friends",
+      "error"
+    );
+
+  }
+}
+
+
+async function acceptFriend(requestId) {
+
+  try {
+
+    const res = await fetch(
+      "http://localhost:3000/friends/requests/" +
+      requestId +
+      "/accept",
+      {
+        method: "POST",
+
+        headers: {
+          "Authorization": "Bearer " + token
+        }
+      }
+    );
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error);
+    }
+
+    showStatus(
+      "Friend request accepted",
+      "success"
+    );
+
+    loadFriends();
+
+  } catch (error) {
+
+    showStatus(error.message, "error");
+
+  }
+}
+
+
+async function rejectFriend(requestId) {
+
+  try {
+
+    const res = await fetch(
+      "http://localhost:3000/friends/requests/" +
+      requestId +
+      "/reject",
+      {
+        method: "POST",
+
+        headers: {
+          "Authorization": "Bearer " + token
+        }
+      }
+    );
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error);
+    }
+
+    showStatus(
+      "Friend request rejected",
+      "success"
+    );
+
+    loadFriends();
+
+  } catch (error) {
+
+    showStatus(error.message, "error");
+
+  }
+}
 async function join() {
 
   if (!token) {
