@@ -1,40 +1,375 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chat App</title>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 20px;
+      background: #f4f4f4;
+    }
+
+    .box {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      margin-bottom: 20px;
+    }
+
+    input, button {
+      padding: 10px;
+      margin: 5px;
+    }
+
+    input {
+      width: 250px;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    #chat {
+      height: 350px;
+      overflow-y: auto;
+      border: 1px solid #ddd;
+      padding: 15px;
+      background: #fafafa;
+    }
+
+    .message {
+      padding: 8px;
+      margin: 5px 0;
+      background: #e8f0fe;
+      border-radius: 8px;
+    }
+
+    .error {
+      color: red;
+    }
+
+    .success {
+      color: green;
+    }
+  </style>
+</head>
+
 <body>
-<h2>Chat App</h2>
-Email: <input id="email">
-Password: <input id="password" type="password">
-<button onclick="register()">Register</button>
-<button onclick="login()">Login</button>
-<br>
-Room: <input id="room"><button onclick="join()">Join</button><br>
-Message: <input id="msg"><button onclick="send()">Send</button>
-<div id="chat"></div>
+
+<h1>Chat App</h1>
+
+<div class="box">
+
+  <h2>Account</h2>
+
+  <input id="email" type="email" placeholder="Email">
+  <input id="password" type="password" placeholder="Password">
+
+  <br>
+
+  <button onclick="register()">Register</button>
+  <button onclick="login()">Login</button>
+
+  <p id="status"></p>
+
+</div>
+
+
+<div class="box">
+
+  <h2>Rooms</h2>
+
+  <input id="roomName" placeholder="New room name">
+  <button onclick="createRoom()">Create room</button>
+
+  <br>
+
+  <input id="room" placeholder="Room ID">
+  <button onclick="join()">Join room</button>
+
+</div>
+
+
+<div class="box">
+
+  <h2>Chat</h2>
+
+  <div id="chat"></div>
+
+  <br>
+
+  <input id="msg" placeholder="Write a message">
+
+  <button onclick="send()">Send</button>
+
+</div>
+
 
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+
 <script>
-let socket, token;
+
+let socket = null;
+let token = null;
+let currentRoom = null;
+
+
+function showStatus(message, type = "") {
+  const status = document.getElementById("status");
+
+  status.textContent = message;
+  status.className = type;
+}
+
+
 async function register() {
-  await fetch("http://localhost:3000/auth/register", {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({email: email.value, username:"user"+Date.now(), password: password.value})
-  });
-  alert("Registered");
+
+  try {
+
+    const res = await fetch(
+      "http://localhost:3000/auth/register",
+      {
+        method: "POST",
+
+        headers: {
+          "Content-Type": "application/json"
+        },
+
+        body: JSON.stringify({
+          email: document.getElementById("email").value,
+          username: "user" + Date.now(),
+          password: document.getElementById("password").value
+        })
+      }
+    );
+
+    if (!res.ok) {
+      throw new Error("Registration failed");
+    }
+
+    showStatus("Registration successful", "success");
+
+  } catch (error) {
+
+    showStatus(error.message, "error");
+
+  }
 }
+
+
 async function login() {
-  const res = await fetch("http://localhost:3000/auth/login", {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({email: email.value, password: password.value})
-  });
-  const data = await res.json();
-  token = data.token;
-  socket = io("http://localhost:3000", { auth: { token } });
-  socket.on("roomMessage", m => chat.innerHTML += "<p>"+m.content+"</p>");
+
+  try {
+
+    const res = await fetch(
+      "http://localhost:3000/auth/login",
+      {
+        method: "POST",
+
+        headers: {
+          "Content-Type": "application/json"
+        },
+
+        body: JSON.stringify({
+          email: document.getElementById("email").value,
+          password: document.getElementById("password").value
+        })
+      }
+    );
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error || data);
+    }
+
+    token = data.token;
+
+    socket = io(
+      "http://localhost:3000",
+      {
+        auth: {
+          token
+        }
+      }
+    );
+
+    socket.on("connect", () => {
+      showStatus("Logged in successfully", "success");
+    });
+
+    socket.on("roomHistory", messages => {
+
+      const chat = document.getElementById("chat");
+
+      chat.innerHTML = "";
+
+      messages.forEach(addMessage);
+
+    });
+
+    socket.on("roomMessage", addMessage);
+
+    socket.on("errorMessage", data => {
+      showStatus(data.message, "error");
+    });
+
+  } catch (error) {
+
+    showStatus(error.message, "error");
+
+  }
 }
-function join() { socket.emit("joinRoom", room.value); }
-function send() { socket.emit("roomMessage", { roomId: room.value, content: msg.value }); }
+
+
+async function createRoom() {
+
+  if (!token) {
+    showStatus("Please login first", "error");
+    return;
+  }
+
+  const name = document.getElementById("roomName").value;
+
+  try {
+
+    const res = await fetch(
+      "http://localhost:3000/rooms",
+      {
+        method: "POST",
+
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + token
+        },
+
+        body: JSON.stringify({
+          name
+        })
+      }
+    );
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error);
+    }
+
+    document.getElementById("room").value = data.id;
+
+    showStatus(
+      "Room created. ID: " + data.id,
+      "success"
+    );
+
+  } catch (error) {
+
+    showStatus(error.message, "error");
+
+  }
+}
+
+
+async function join() {
+
+  if (!token) {
+    showStatus("Please login first", "error");
+    return;
+  }
+
+  const roomId = document.getElementById("room").value;
+
+  try {
+
+    const res = await fetch(
+      "http://localhost:3000/rooms/" + roomId + "/join",
+      {
+        method: "POST",
+
+        headers: {
+          "Authorization": "Bearer " + token
+        }
+      }
+    );
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error);
+    }
+
+    currentRoom = roomId;
+
+    socket.emit("joinRoom", roomId);
+
+    showStatus(
+      "Joined room " + roomId,
+      "success"
+    );
+
+  } catch (error) {
+
+    showStatus(error.message, "error");
+
+  }
+}
+
+
+function send() {
+
+  if (!socket) {
+    showStatus("Please login first", "error");
+    return;
+  }
+
+  if (!currentRoom) {
+    showStatus("Join a room first", "error");
+    return;
+  }
+
+  const input = document.getElementById("msg");
+
+  const content = input.value.trim();
+
+  if (!content) {
+    return;
+  }
+
+  socket.emit(
+    "roomMessage",
+    {
+      roomId: currentRoom,
+      content
+    }
+  );
+
+  input.value = "";
+
+}
+
+
+function addMessage(message) {
+
+  const chat = document.getElementById("chat");
+
+  const div = document.createElement("div");
+
+  div.className = "message";
+
+  div.textContent = message.content;
+
+  chat.appendChild(div);
+
+  chat.scrollTop = chat.scrollHeight;
+
+}
+
 </script>
+
 </body>
 </html>
