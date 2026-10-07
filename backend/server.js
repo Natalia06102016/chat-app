@@ -34,14 +34,68 @@ io.use((socket, next) => {
 });
 
 io.on("connection", (socket) => {
-  socket.on("joinRoom", (roomId) => socket.join("room_" + roomId));
-  socket.on("roomMessage", async ({ roomId, content }) => {
-    await pool.query(
-      "INSERT INTO messages (sender_id, room_id, content) VALUES ($1,$2,$3)",
-      [socket.user.id, roomId, content]
+  socket.on("joinRoom", async (roomId) => {
+  try {
+    const result = await pool.query(
+      `SELECT 1
+       FROM room_members
+       WHERE user_id = $1 AND room_id = $2`,
+      [socket.user.id, roomId]
     );
-    io.to("room_" + roomId).emit("roomMessage", { content });
-  });
+
+    if (result.rows.length === 0) {
+      socket.emit("errorMessage", {
+        message: "You are not a member of this room"
+      });
+      return;
+    }
+
+    socket.join("room_" + roomId);
+  } catch (error) {
+    socket.emit("errorMessage", {
+      message: "Failed to join room"
+    });
+  }
+});
+  socket.on("roomMessage", async ({ roomId, content }) => {
+  try {
+    if (!content || !content.trim()) {
+      return;
+    }
+
+    const member = await pool.query(
+      `SELECT 1
+       FROM room_members
+       WHERE user_id = $1 AND room_id = $2`,
+      [socket.user.id, roomId]
+    );
+
+    if (member.rows.length === 0) {
+      socket.emit("errorMessage", {
+        message: "You are not a member of this room"
+      });
+      return;
+    }
+
+    const result = await pool.query(
+      `INSERT INTO messages
+       (sender_id, room_id, content)
+       VALUES ($1, $2, $3)
+       RETURNING id, sender_id, room_id, content, created_at`,
+      [socket.user.id, roomId, content.trim()]
+    );
+
+    io.to("room_" + roomId).emit(
+      "roomMessage",
+      result.rows[0]
+    );
+  } catch (error) {
+    console.error(error);
+
+    socket.emit("errorMessage", {
+      message: "Failed to send message"
+    });
+  }
 });
 
 server.listen(3000, () => console.log("Backend running on 3000"));
